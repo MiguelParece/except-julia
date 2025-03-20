@@ -33,7 +33,7 @@ function signal(exception)
     for (name, handler) in reverse(handlers)
         
         if name == exception # encontrou um handler para a excepcao
-            println("Handler found, calling handler")
+           # println("Handler found, calling handler")
             handler(exception)
             handled = true
             break
@@ -41,7 +41,7 @@ function signal(exception)
     end
 
     if !handled
-        println("No Handler found, ignore signal")
+        #println("No Handler found, ignore signal")
         # nao tem problema, nao ha handlers para esta excepcao ( signal )
     end
 
@@ -56,13 +56,13 @@ function handling(f, handlers) # funcao F e um dicionario de handlers
     for (exception, handler) in handlers
         push!(current_handlers, (exception => handler))
     end
-
-    f()
-
-    #limpar os handlers
-    task_local_storage()[HANDLERS_KEY] = current_handlers[1:orignal_size] 
-
+    try
+        f()
+    finally
+        task_local_storage()[HANDLERS_KEY] = current_handlers[1:orignal_size] 
+    end
 end
+
 
 
 function to_escape(f)
@@ -90,15 +90,16 @@ end
 
 
 
+function with_restart()
+end
 
 
 
 function invoke_restart()
-
+end
 
 function with_restart(f , restarts)
    
-
 end
 
 
@@ -180,13 +181,19 @@ function print_line(str, line_end=20)
             print(c)
             col += 1
             if col == line_end
-                signal(EndOfLine())
+                signal(EndOfLine)
                 col = 0
             end
         end
     end
 end
 
-print_line("Hi, everybody! How are you feeling today?") end
+print_line("Hi, everybody! How are you feeling today?")
 
-handling(() -> print_line("Hi, everybody! How are you feeling today?"), [(EndOfLine, c -> println("I saw an end of line"))])
+handling([(EndOfLine, c -> println("\n"))]) do 
+    print_line("Hi, everybody! How are you feeling today?")
+    
+end
+
+# print the task task_local_storage
+println(task_local_storage())
