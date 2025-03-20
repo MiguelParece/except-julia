@@ -1,43 +1,67 @@
+struct SignalException <: Exception 
+    exception::Exception
+    must_handle::Bool
+
+end
+
+struct EndOfLine <: Exception end
+
 struct DivisionByZero <: Exception end
-struct ExitException <: Exception  
-    token::Any
-    value::Any
-end
-
-function reciprocal(x)
-    if x == 0
-        signal(DivisionByZero)  # Use `throw` instead of `error`
-        return 2
-    else
-        x = 1 / x
-        return x +1
-    end
-end
 
 
+const HANDLERS_KEY = :__exceptional_handlers
+const RESTARTS_KEY = :__exceptional_restarts
 
-
-function signal(exception)
-    return throw(exception())
-end
 
 
 function error(exception)
-    return error(exception())
+    #verificar se existem handlers disponiveis
+    #se existirem, chamar o handler
+    
+    #se nao dar barraca
+    
+    return throw(SignalException(exception, true))
 end
 
 
-function handling(f, handlers)
-    try
-        f()
-    catch e
-        for (exception, handler) in handlers
-            if e isa exception
-                handler(e)
-            end
+function signal(exception)
+    #verificar se existem handlers disponiveis
+    #se existirem, chamar o handler
+    handlers = get(task_local_storage(), HANDLERS_KEY, Pair{Type{<:Exception}, Function}[])
+    handled = false
+   
+    for (name, handler) in reverse(handlers)
+        
+        if name == exception # encontrou um handler para a excepcao
+            println("Handler found, calling handler")
+            handler(exception)
+            handled = true
+            break
         end
-        rethrow(e)
     end
+
+    if !handled
+        println("No Handler found, ignore signal")
+        # nao tem problema, nao ha handlers para esta excepcao ( signal )
+    end
+
+end
+
+
+function handling(f, handlers) # funcao F e um dicionario de handlers
+    #preparar os handlers
+    current_handlers = get!(task_local_storage(), HANDLERS_KEY, Pair{Type{<:Exception}, Function}[])
+    orignal_size = length(current_handlers)
+
+    for (exception, handler) in handlers
+        push!(current_handlers, (exception => handler))
+    end
+
+    f()
+
+    #limpar os handlers
+    task_local_storage()[HANDLERS_KEY] = current_handlers[1:orignal_size] 
+
 end
 
 
@@ -65,13 +89,59 @@ function to_escape(f)
 end
 
 
-function with_restart()
+
+
+
+
+function invoke_restart()
+
+
+function with_restart(f , restarts)
+   
+
 end
+
+
+
+
+
+
+
+# tests
+
+function reciprocal(x)
+    if x == 0
+        signal(DivisionByZero)  # Use `throw` instead of `error`
+        return 2
+    else
+        x = 1 / x
+        return x +1
+    end
+end
+
+
 
 reciprocal(0)
 
 
-handling(() -> reciprocal(0), [(DivisionByZero, c -> println("I saw a division by zero"))])
+handling([DivisionByZero => c -> println("I saw a division by zero")]) do
+    reciprocal(0)
+end
+
+
+handling([DivisionByZero => (c) -> println("I saw a division by zero ola")]) do
+    handling([DivisionByZero => (c) -> (println("i saw a div 0"))]) do
+        handling([DivisionByZero => (c) -> (println("i saw a div 30"))]) do
+            handling([DivisionByZero => (c) -> (println("i saw a div 350"))]) do
+                reciprocal(0)
+            end
+            reciprocal(0)
+        end
+        reciprocal(0)
+    end
+    reciprocal(0)
+end 
+
 
 
 to_escape() do exit
@@ -83,6 +153,7 @@ to_escape() do exit
 end
 
 
+
 function mystery(n) 
 1 +
     to_escape() do outer
@@ -90,6 +161,7 @@ function mystery(n)
         to_escape() do inner
             1+
             if n == 0
+                outer(1)
                 inner(1)
             elseif n == 1
                 outer(1)
@@ -99,3 +171,22 @@ function mystery(n)
         end
     end
 end
+
+
+
+function print_line(str, line_end=20)
+    let col = 0
+        for c in str
+            print(c)
+            col += 1
+            if col == line_end
+                signal(EndOfLine())
+                col = 0
+            end
+        end
+    end
+end
+
+print_line("Hi, everybody! How are you feeling today?") end
+
+handling(() -> print_line("Hi, everybody! How are you feeling today?"), [(EndOfLine, c -> println("I saw an end of line"))])
