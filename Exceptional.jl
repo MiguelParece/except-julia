@@ -17,10 +17,21 @@ const RESTARTS_KEY = :__exceptional_restarts
 function error(exception)
     #verificar se existem handlers disponiveis
     #se existirem, chamar o handler
+    handlers = get(task_local_storage(), HANDLERS_KEY, Pair{Type{<:Exception}, Function}[])
+    handled = false
     
+    for (name, handler) in reverse(handlers)
+        
+        if name == exception # encontrou um handler para a excepcao
+            handler(exception)
+            handled = true
+            break
+        end
+    end
     #se nao dar barraca
-    
-    return throw(SignalException(exception, true))
+    if !handled
+        throw(exception)
+    end
 end
 
 
@@ -48,7 +59,7 @@ function signal(exception)
 end
 
 
-function handling(f, handlers) # funcao F e um dicionario de handlers
+function handling(f, handlers) # funcao F e pairs de handlers
     #preparar os handlers
     current_handlers = get!(task_local_storage(), HANDLERS_KEY, Pair{Type{<:Exception}, Function}[])
     orignal_size = length(current_handlers)
@@ -87,6 +98,7 @@ function to_escape(f)
         
     end
 end
+
 
 
 
@@ -181,7 +193,7 @@ function print_line(str, line_end=20)
             print(c)
             col += 1
             if col == line_end
-                signal(EndOfLine)
+                error(EndOfLine)
                 col = 0
             end
         end
@@ -189,6 +201,7 @@ function print_line(str, line_end=20)
 end
 
 print_line("Hi, everybody! How are you feeling today?")
+
 
 handling([(EndOfLine, c -> println("\n"))]) do 
     print_line("Hi, everybody! How are you feeling today?")
