@@ -3,6 +3,37 @@ import Main.Exceptional: DivisionByZero, EndOfLine
 using Test
 include("Exceptional.jl")
 
+# Reciprocal function without restarts
+function reciprocal(value)
+    value == 0 ? Exceptional.error(DivisionByZero) : 1/value
+end
+
+function run_tests_wr()
+    # Test handling  
+    @testset "Exceptional Module Tests" begin
+        @testset "Basic Restart Functionality" begin
+            # Normal computation
+            @test reciprocal(10) == 0.1 
+
+            # Test return_zero restart
+            result = Exceptional.handling(DivisionByZero => (c) -> 1) do
+                Exceptional.handling(DivisionByZero => (c) -> 2) do
+                    Exceptional.handling(DivisionByZero => (c) -> 3) do
+                        reciprocal(0)  # This triggers DivisionByZero
+                    end
+                    reciprocal(0)
+                end
+                reciprocal(0)
+            end
+            
+            @test result == 1  # Ensures the outermost handling block receives 1
+        end
+    end
+end
+
+
+run_tests_wr()
+
 # Reciprocal function with restarts
 function reciprocal(value)
     with_restart(
