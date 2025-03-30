@@ -17,6 +17,8 @@ end
 
 struct DivisionByZero <: Exception end
 
+
+#new
 #estrutura para os restarts
 struct restart_data
     name ::Symbol  # nome do restart
@@ -30,8 +32,8 @@ end
 const HANDLERS_KEY = :__exceptional_handlers
 const RESTARTS_KEY = :__exceptional_restarts
 
-
-
+#new
+#overwrite da funcao error
 function error(exception)
     #verificar se existem handlers disponiveis
     #se existirem, chamar o handler
@@ -152,7 +154,7 @@ function handling(f, handlers...) # funcao F e pairs de handlers
     end
 end
 
-
+#new
 # overwrite da funcao with_restart identity
 function with_restart(f, restarts...)
     return to_escape() do exit
@@ -179,11 +181,13 @@ function with_restart(f, restarts...)
     end
 end
 
+#new
 function get_available_restarts()
     restarts = get(task_local_storage(), RESTARTS_KEY, restart_data[])
     return [restart.name for restart in restarts if restart.test()]
 end
 
+#new
 #overwrite da funcao available_restart
 function available_restart(name)
     restarts = get(task_local_storage(), RESTARTS_KEY, restart_data[])
@@ -195,6 +199,7 @@ function available_restart(name)
     return false
 end
 
+#new
 #overwrite da funcao invoke_restart
 function invoke_restart(name, args...)
     restarts = get(task_local_storage(), RESTARTS_KEY, restart_data[])
