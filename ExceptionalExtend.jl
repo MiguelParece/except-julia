@@ -11,13 +11,13 @@ struct EndOfLine <: Exception end
 
 #exception exclusiva para o to_escape
 struct ExitException <: Exception 
-    
     token::Any
     value::Any
 end
 
 struct DivisionByZero <: Exception end
 
+#estrutura para os restarts
 struct restart_data
     name ::Symbol  # nome do restart
     test :: Function # boolean function
@@ -48,7 +48,38 @@ function error(exception)
             break
         end
     end
-    #se nao dar barraca
+    #se nao verificar se existem restarts disponiveis e dar prompt ao user
+
+        available_restarts = get_available_restarts()
+
+        if !isempty(available_restarts)
+            # listar os restarts disponiveis enumerados
+            println("Available restarts: ")
+            for (i, restart) in enumerate(available_restarts)
+                println("$(i): $(restart)")
+            end
+            #pedir input do numero do restart ao user
+            print("Enter the number of the restart you wish to invoke: ")
+
+            flush(stdout)
+            input = readline()
+            restart_number = parse(Int, input)
+
+            #verificar se o numero e valido
+            if restart_number < 1 || restart_number > length(available_restarts)
+                println("Invalid restart number")
+                return error(exception)
+            end
+
+            #invocar o restart
+
+            return invoke_restart(available_restarts[restart_number])
+
+
+            
+        end
+
+
     if !handled
         println("No Handler found coco")
         throw(exception)
@@ -148,7 +179,12 @@ function with_restart(f, restarts...)
     end
 end
 
+function get_available_restarts()
+    restarts = get(task_local_storage(), RESTARTS_KEY, restart_data[])
+    return [restart.name for restart in restarts if restart.test()]
+end
 
+#overwrite da funcao available_restart
 function available_restart(name)
     restarts = get(task_local_storage(), RESTARTS_KEY, restart_data[])
     for restart in restarts
@@ -159,7 +195,7 @@ function available_restart(name)
     return false
 end
 
-
+#overwrite da funcao invoke_restart
 function invoke_restart(name, args...)
     restarts = get(task_local_storage(), RESTARTS_KEY, restart_data[])
 
@@ -182,6 +218,7 @@ function invoke_restart(name, args...)
     return false #nao encontrou nenhum restart com esse nome
 end
 
+
 function reciprocal(x)
     with_restart(
     :return_value => (;
@@ -189,20 +226,33 @@ function reciprocal(x)
         test = () -> true,
         report = () -> "Return a custom value",
         interactive = () -> begin
-        print("Enter value: ")
-        flush(stdout)
-        input = readline()
-        (parse(Float64, input),)  # Return as a tuple
-    end
-    )) do 
+            print("Enter value: ")
+            flush(stdout)
+            input = readline()
+            (parse(Int, input),) 
+        end
+    )) do   
         x == 0 ? error(DivisionByZero) : 1/x
     end
 
 end
 
 
-x =handling(DivisionByZero => (c) -> invoke_restart(:return_value)) do
+x =handling(DivisionByZero => (c) -> invoke_restart(:return_value,6)) do
     reciprocal(0)
 end
 println(x)
+
+y = reciprocal(0)
+
+println(y)
+
+
+
+
+
+
+
+
+
 end
