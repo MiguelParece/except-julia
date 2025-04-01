@@ -17,8 +17,10 @@ struct ExitException <: Exception
     value::Any
 end
 
-struct DivisionByZero <: Exception end
+abstract type DivisionByZero <: Exception end
 
+struct DivisionByZero_1 <: DivisionByZero end
+struct DivisionByZero_2 <: DivisionByZero end
 
 const HANDLERS_KEY = :__exceptional_handlers
 const RESTARTS_KEY = :__exceptional_restarts
@@ -28,47 +30,36 @@ const RESTARTS_KEY = :__exceptional_restarts
 function error(exception)
     #verificar se existem handlers disponiveis
     #se existirem, chamar o handler
-    handlers = get(task_local_storage(), HANDLERS_KEY, Pair{Type{<:Exception}, Function}[])
+    handlers = get!(task_local_storage(), HANDLERS_KEY, Vector{Vector{Pair{Type{<:Exception}, Function}}}())
     handled = false
-    
-    for (name, handler) in reverse(handlers)
-        
-        if exception == name # encontrou um handler para a excepcao
-            println("Handler found, calling handler")
-            
-            return handler(exception)
-            handled = true
-            break
+    for handler_block in reverse(handlers)
+        for (name, handler) in reverse(handler_block)
+            if typeof(exception) isa typeof(name) # encontrou um handler para a excepcao
+                handler(exception)
+                break
+            end
         end
     end
-    #se nao dar barraca
-    if !handled
-        println("No Handler found coco")
-        throw(exception)
-    end
+
+    #duvida é suposto dar erro certo ?
+    println("No Handler found coco")
+    throw(exception)
+    
 end
 
 
 function signal(exception)
     #verificar se existem handlers disponiveis
     #se existirem, chamar o handler
-    handlers = get(task_local_storage(), HANDLERS_KEY, Pair{Type{<:Exception}, Function}[])
+    handlers = get!(task_local_storage(), HANDLERS_KEY, Vector{Vector{Pair{Type{<:Exception}, Function}}}())
     handled = false
-
-
-    for (name, handler) in reverse(handlers)
-        
-        if name == exception # encontrou um handler para a excepcao
-           # println("Handler found, calling handler")
-            handler(exception)
-            handled = true
-            break
+    for handler_block in reverse(handlers)
+        for (name, handler) in reverse(handler_block)
+            if typeof(exception) isa typeof(name) # encontrou um handler para a excepcao
+                handler(exception)
+                break
+            end
         end
-    end
-
-    if !handled
-        #println("No Handler found, ignore signal")
-        # nao tem problema, nao ha handlers para esta excepcao ( signal )
     end
 
 end
@@ -100,16 +91,37 @@ end
 
 function handling(f, handlers...) # funcao F e pairs de handlers
     #preparar os handlers
-    current_handlers = get!(task_local_storage(), HANDLERS_KEY, Pair{Type{<:Exception}, Function}[])
+    current_handlers = get!(task_local_storage(), HANDLERS_KEY, Vector{Vector{Pair{Type{<:Exception}, Function}}}())
     orignal_size = length(current_handlers)
 
-    for (exception, handler) in handlers
-        #println("Adding handler for exception: ", exception)
-        push!(current_handlers, (exception => handler))
+   # println("ola", orignal_size)
+
+    new_handlers_block = Pair{Type{<:Exception}, Function}[]
+
+    if(orignal_size > 0)
+        #clonar o array de handlers mais recente
+      #  println("tentou clonar")
+        new_handlers_block = copy(current_handlers[end])
+      #  println("clonou")
     end
+
+    for (exception, handler) in handlers
+        
+       # println("oi",exception, handler)
+        
+        push!(new_handlers_block, (exception => handler))
+
+    end
+
+    #adicionar o bloco de handlers ao array de handlers    
+    push!(current_handlers, new_handlers_block)
+    
+    #println("Entering block :", get!(task_local_storage(), HANDLERS_KEY, Vector{Vector{Pair{Type{<:Exception}, Function}}}()))
+
     try
         return f()
     finally
+        println("Exiting block ")
         task_local_storage()[HANDLERS_KEY] = current_handlers[1:orignal_size] 
     end
 end
@@ -157,6 +169,16 @@ function invoke_restart(name, args...)
     println("Restart not found")
     return false #nao encontrou nenhum restart com esse nome
 end
+
+
+#BUG
+handling(DivisionByZero_2 => (c) -> println("mamas1")) do
+    handling(DivisionByZero_1 => (c) -> println("mamas2"),DivisionByZero_2 => (c)->println("mamas3")) do
+        signal(DivisionByZero)
+    end
+    signal(DivisionByZero)
+end
+
 
 
 end # end module

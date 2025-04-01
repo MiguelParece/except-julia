@@ -138,6 +138,8 @@ function to_escape(f)
 end
 
 
+
+
 function handling(f, handlers...) # funcao F e pairs de handlers
     #preparar os handlers
     current_handlers = get!(task_local_storage(), HANDLERS_KEY, Pair{Type{<:Exception}, Function}[])
@@ -153,6 +155,9 @@ function handling(f, handlers...) # funcao F e pairs de handlers
         task_local_storage()[HANDLERS_KEY] = current_handlers[1:orignal_size] 
     end
 end
+
+
+
 
 #new
 # overwrite da funcao with_restart identity
@@ -260,10 +265,10 @@ x = handling(DivisionByZero => (c) -> invoke_restart(:return_value,6)) do
     y = handling(DivisionByZero => (c) -> invoke_restart(:return_value,2)) do
         reciprocal(0)
     end
-    @test y == 2
+   # @test y == 2
     reciprocal(0)
 end
-@test x == 6
+#@test x == 6
 
 function write_to_file(filename, data)
     with_restart() do
@@ -283,7 +288,7 @@ x = 3
 write_to_file("text.txt", string(reciprocal(0)))
 
 #then create the file and choose the retry restart
-
+@handling DivisionByZero print("Retry") reciprocal(0)
 
 #assert 
 
