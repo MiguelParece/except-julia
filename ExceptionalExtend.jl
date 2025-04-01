@@ -1,13 +1,12 @@
 module ExcepionalExtend     
 
-
-
-    
+using Test    
 import Base.identity
 
 
-
 struct EndOfLine <: Exception end
+
+struct NoSuchFile <: Exception end
 
 #exception exclusiva para o to_escape
 struct ExitException <: Exception 
@@ -18,7 +17,7 @@ end
 struct DivisionByZero <: Exception end
 
 
-#new
+#new     
 #estrutura para os restarts
 struct restart_data
     name ::Symbol  # nome do restart
@@ -32,7 +31,7 @@ end
 const HANDLERS_KEY = :__exceptional_handlers
 const RESTARTS_KEY = :__exceptional_restarts
 
-#new
+#new   
 #overwrite da funcao error
 function error(exception)
     #verificar se existem handlers disponiveis
@@ -56,6 +55,7 @@ function error(exception)
 
         if !isempty(available_restarts)
             # listar os restarts disponiveis enumerados
+            println("error: ", exception)
             println("Available restarts: ")
             for (i, restart) in enumerate(available_restarts)
                 println("$(i): $(restart)")
@@ -159,8 +159,19 @@ end
 function with_restart(f, restarts...)
     return to_escape() do exit
         #preparar os restarts 
+
+
+        
+        
         current_restarts = get!(task_local_storage(), RESTARTS_KEY, restart_data[])
         orignal_size = length(current_restarts)
+        #default restart Abort e Retry
+
+        push!(current_restarts, ExcepionalExtend.restart_data(:abort, ()->true, ()->"Abort", ()->(), (args...)->(println("Aborting");Base.exit(1))))
+        
+        #retry a funcao f()
+        push!(current_restarts, ExcepionalExtend.restart_data(:retry, ()->true, ()->"Retry", ()->(), (args...)->f(args...)))
+
         for (name,meta) in restarts
             
             funct = get(meta, :funct, println("No function provided for restart: ", name))
@@ -169,11 +180,12 @@ function with_restart(f, restarts...)
             interactive = get(meta, :interactive, ()->())
 
             #print the types of the vars : 
-            println("Name: ", name, " Test: ", test, " Report: ", report, " Interactive: ", interactive, " Function: ", funct)
+            #println("Name: ", name, " Test: ", test, " Report: ", report, " Interactive: ", interactive, " Function: ", funct)
 
             push!(current_restarts, ExcepionalExtend.restart_data(name, test, report, interactive, funct))
         end
         try
+
             f()
         finally
             task_local_storage()[RESTARTS_KEY] = current_restarts[1:orignal_size] 
@@ -236,28 +248,47 @@ function reciprocal(x)
             input = readline()
             (parse(Int, input),) 
         end
-    )) do   
+    )
+    ) do   
         x == 0 ? error(DivisionByZero) : 1/x
     end
 
 end
 
 
-x =handling(DivisionByZero => (c) -> invoke_restart(:return_value,6)) do
+x = handling(DivisionByZero => (c) -> invoke_restart(:return_value,6)) do
+    y = handling(DivisionByZero => (c) -> invoke_restart(:return_value,2)) do
+        reciprocal(0)
+    end
+    @test y == 2
     reciprocal(0)
 end
-println(x)
+@test x == 6
+
+function write_to_file(filename, data)
+    with_restart() do
+        #check if the file exists
+        if !isfile(filename)
+            error(NoSuchFile)
+            open(filename, "w") do file
+                write(file, data)
+            end
+        end
+end
+end
+
+#test retry
+x = 3
+#write the var x to file
+write_to_file("text.txt", string(reciprocal(0)))
+
+#then create the file and choose the retry restart
+
+
+#assert 
 
 y = reciprocal(0)
 
 println(y)
-
-
-
-
-
-
-
-
 
 end

@@ -104,7 +104,7 @@ function handling(f, handlers...) # funcao F e pairs de handlers
     orignal_size = length(current_handlers)
 
     for (exception, handler) in handlers
-        println("Adding handler for exception: ", exception)
+        #println("Adding handler for exception: ", exception)
         push!(current_handlers, (exception => handler))
     end
     try
@@ -136,7 +136,7 @@ end
 
 function available_restart(name)
     restarts = get(task_local_storage(), RESTARTS_KEY, Pair{Symbol, Function}[])
-    for (restart, handler) in restarts
+    for (restart, handler) in Iterators.reverse(restarts)
         if restart == name
             return true
         end
