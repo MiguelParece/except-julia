@@ -36,19 +36,18 @@ const RESTARTS_KEY = :__exceptional_restarts
 function error(exception)
     #verificar se existem handlers disponiveis
     #se existirem, chamar o handler
-    handlers = get(task_local_storage(), HANDLERS_KEY, Pair{Type{<:Exception}, Function}[])
-    handled = false
-    
-    for (name, handler) in reverse(handlers)
-        
-        if exception == name # encontrou um handler para a excepcao
-            println("Handler found, calling handler")
-            
-            return handler(exception)
-            handled = true
-            break
+
+    handlers = get!(task_local_storage(), HANDLERS_KEY, Vector{Vector{Pair{Type{<:Exception}, Function}}}())
+    for handler_block in reverse(handlers)
+        for (name, handler) in reverse(handler_block)
+            if typeof(exception) isa typeof(name) # encontrou um handler para a excepcao
+                handler(exception)
+                break
+            end
         end
     end
+
+    
     #se nao verificar se existem restarts disponiveis e dar prompt ao user
 
         available_restarts = get_available_restarts()
@@ -82,35 +81,27 @@ function error(exception)
         end
 
 
-    if !handled
-        println("No Handler found coco")
-        throw(exception)
-    end
+    println("No Handler found coco")
+    throw(exception)
+
 end
 
 
 function signal(exception)
     #verificar se existem handlers disponiveis
     #se existirem, chamar o handler
-    handlers = get(task_local_storage(), HANDLERS_KEY, Pair{Type{<:Exception}, Function}[])
+    #verificar se existem handlers disponiveis
+    #se existirem, chamar o handler
+    handlers = get!(task_local_storage(), HANDLERS_KEY, Vector{Vector{Pair{Type{<:Exception}, Function}}}())
     handled = false
-
-
-    for (name, handler) in reverse(handlers)
-        
-        if name == exception # encontrou um handler para a excepcao
-           # println("Handler found, calling handler")
-            handler(exception)
-            handled = true
-            break
+    for handler_block in reverse(handlers)
+        for (name, handler) in reverse(handler_block)
+            if typeof(exception) isa typeof(name) # encontrou um handler para a excepcao
+                handler(exception)
+                break
+            end
         end
     end
-
-    if !handled
-        #println("No Handler found, ignore signal")
-        # nao tem problema, nao ha handlers para esta excepcao ( signal )
-    end
-
 end
 
 
@@ -139,19 +130,39 @@ end
 
 
 
-
 function handling(f, handlers...) # funcao F e pairs de handlers
     #preparar os handlers
-    current_handlers = get!(task_local_storage(), HANDLERS_KEY, Pair{Type{<:Exception}, Function}[])
+    current_handlers = get!(task_local_storage(), HANDLERS_KEY, Vector{Vector{Pair{Type{<:Exception}, Function}}}())
     orignal_size = length(current_handlers)
 
-    for (exception, handler) in handlers
-        println("Adding handler for exception: ", exception)
-        push!(current_handlers, (exception => handler))
+   # println("ola", orignal_size)
+
+    new_handlers_block = Pair{Type{<:Exception}, Function}[]
+
+    if(orignal_size > 0)
+        #clonar o array de handlers mais recente
+      #  println("tentou clonar")
+        new_handlers_block = copy(current_handlers[end])
+      #  println("clonou")
     end
+
+    for (exception, handler) in handlers
+        
+       # println("oi",exception, handler)
+        
+        push!(new_handlers_block, (exception => handler))
+
+    end
+
+    #adicionar o bloco de handlers ao array de handlers    
+    push!(current_handlers, new_handlers_block)
+    
+    #println("Entering block :", get!(task_local_storage(), HANDLERS_KEY, Vector{Vector{Pair{Type{<:Exception}, Function}}}()))
+
     try
-        return f()
+         f()
     finally
+        #println("Exiting block ")
         task_local_storage()[HANDLERS_KEY] = current_handlers[1:orignal_size] 
     end
 end
@@ -184,10 +195,11 @@ function with_restart(f, restarts...)
             report = get(meta, :report, string(name))
             interactive = get(meta, :interactive, ()->())
 
+            
             #print the types of the vars : 
             #println("Name: ", name, " Test: ", test, " Report: ", report, " Interactive: ", interactive, " Function: ", funct)
 
-            push!(current_restarts, ExcepionalExtend.restart_data(name, test, report, interactive, funct))
+            push!(current_restarts, ExcepionalExtend.restart_data(name, test, report, interactive, (args...)->exit(funct(args...))))
         end
         try
 
@@ -232,6 +244,7 @@ function invoke_restart(name, args...)
                 args = restart.interacive()
             end
             println("Report for restart: ", restart.report())
+
             return restart.funct(args...)
         end
     end
@@ -239,6 +252,8 @@ function invoke_restart(name, args...)
     println("Restart not found")
     return false #nao encontrou nenhum restart com esse nome
 end
+
+
 
 
 function reciprocal(x)
@@ -261,15 +276,6 @@ function reciprocal(x)
 end
 
 
-x = handling(DivisionByZero => (c) -> invoke_restart(:return_value,6)) do
-    y = handling(DivisionByZero => (c) -> invoke_restart(:return_value,2)) do
-        reciprocal(0)
-    end
-   # @test y == 2
-    reciprocal(0)
-end
-#@test x == 6
-
 function write_to_file(filename, data)
     with_restart() do
         #check if the file exists
@@ -278,22 +284,34 @@ function write_to_file(filename, data)
             open(filename, "w") do file
                 write(file, data)
             end
+        else
+            open(filename, "w") do file
+                write(file, data)
+            end
         end
-end
+    end
 end
 
-#test retry
-x = 3
+
+
+
+
+handling(DivisionByZero => (c) -> invoke_restart(:return_value,6)) do
+    handling(DivisionByZero => (c) -> invoke_restart(:return_value,2)) do
+         y = reciprocal(0)
+         @test y == 2
+    end
+    x= reciprocal(0)
+    @test x == 6
+end
+
+
+
 #write the var x to file
 write_to_file("text.txt", string(reciprocal(0)))
 
 #then create the file and choose the retry restart
-@handling DivisionByZero print("Retry") reciprocal(0)
+#@handling DivisionByZero print("Retry") reciprocal(0)
 
-#assert 
-
-y = reciprocal(0)
-
-println(y)
 
 end

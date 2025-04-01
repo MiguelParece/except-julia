@@ -5,7 +5,7 @@ export signal, error, handling, with_restart, available_restart, invoke_restart,
 export DivisionByZero, ExitException, EndOfLine
 
 import Base.identity
-
+using Test
 
 
 struct EndOfLine <: Exception end
@@ -107,7 +107,7 @@ function handling(f, handlers...) # funcao F e pairs de handlers
 
     for (exception, handler) in handlers
         
-       # println("oi",exception, handler)
+        println("oi",exception, handler)
         
         push!(new_handlers_block, (exception => handler))
 
@@ -121,7 +121,7 @@ function handling(f, handlers...) # funcao F e pairs de handlers
     try
         return f()
     finally
-        println("Exiting block ")
+        #println("Exiting block ")
         task_local_storage()[HANDLERS_KEY] = current_handlers[1:orignal_size] 
     end
 end
@@ -170,15 +170,26 @@ function invoke_restart(name, args...)
     return false #nao encontrou nenhum restart com esse nome
 end
 
-
-#BUG
-handling(DivisionByZero_2 => (c) -> println("mamas1")) do
-    handling(DivisionByZero_1 => (c) -> println("mamas2"),DivisionByZero_2 => (c)->println("mamas3")) do
-        signal(DivisionByZero)
+function reciprocal(value)
+    with_restart(
+        :return_zero => () -> 0,
+        :return_value => identity,
+        :retry_using => reciprocal
+    ) do
+        value == 0 ? Exceptional.error(DivisionByZero_2) : 1/value
     end
-    signal(DivisionByZero)
 end
 
+
+#BUG
+handling(DivisionByZero_2 => (c) -> invoke_restart(:retry_using,2)) do
+    handling(DivisionByZero_2 => (c) -> println("mamas2"),DivisionByZero_2 => (c) -> println("ola")) do
+        x = reciprocal(0)
+        @test x == 1/2
+    end
+
+    reciprocal(0)
+end
 
 
 end # end module
