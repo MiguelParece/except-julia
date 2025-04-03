@@ -182,7 +182,7 @@ end
 
 
 #BUG
-handling(DivisionByZero_2 => (c) -> invoke_restart(:retry_using,2)) do
+handling(DivisionByZero_2 => (c) -> println("ola")) do
     handling(DivisionByZero_2 => (c) -> println("mamas2"),DivisionByZero_2 => (c) -> println("ola")) do
         x = reciprocal(0)
         @test x == 1/2

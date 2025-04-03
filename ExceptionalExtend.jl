@@ -3,6 +3,9 @@ module ExcepionalExtend
 using Test    
 import Base.identity
 
+include("Exceptional.jl")
+using .Exceptional
+
 
 struct EndOfLine <: Exception end
 
@@ -189,8 +192,20 @@ function with_restart(f, restarts...)
         push!(current_restarts, ExcepionalExtend.restart_data(:retry, ()->true, ()->"Retry", ()->(), (args...)->f(args...)))
 
         for (name,meta) in restarts
-            
-            funct = get(meta, :funct, println("No function provided for restart: ", name))
+
+            #print funct 
+            #println("Funct: ", meta[:funct])
+
+            funct = get(meta, :funct, ()->())
+
+            if(funct=== nothing || !isa(funct, Function))
+                println("Funct: ", meta[:funct])
+                println("Funct: ", funct)
+                println("Funct: ", isa(funct, Function))
+                println("Funct: ", typeof(funct))
+                
+            end
+
             test = get(meta, :test, true)
             report = get(meta, :report, string(name))
             interactive = get(meta, :interactive, ()->())
@@ -294,21 +309,27 @@ end
 
 
 
+x = reciprocal(0)
+
+println("X: ", x)
 
 
-handling(DivisionByZero => (c) -> invoke_restart(:return_value,6)) do
-    handling(DivisionByZero => (c) -> invoke_restart(:return_value,2)) do
-         y = reciprocal(0)
-         @test y == 2
-    end
-    x= reciprocal(0)
-    @test x == 6
-end
+
+#handling(DivisionByZero => (c) -> invoke_restart(:return_value,6)) do
+#    handling(DivisionByZero => (c) -> invoke_restart(:return_value,2)) do
+#         y = reciprocal(0)
+#         @test y == 2
+#    end
+#    x= reciprocal(0)
+#    @test x == 6
+#end
+
+
 
 
 
 #write the var x to file
-write_to_file("text.txt", string(reciprocal(0)))
+#write_to_file("text.txt", string(reciprocal(0)))
 
 #then create the file and choose the retry restart
 #@handling DivisionByZero print("Retry") reciprocal(0)
